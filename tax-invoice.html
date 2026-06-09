@@ -304,6 +304,50 @@
     pointer-events: none;
   }
   .toast.show { opacity: 1; }
+
+  /* ===== MOBILE RESPONSIVE ===== */
+  @media (max-width: 768px) {
+
+    /* Nav */
+    .nav-bar { padding: 0 10px; gap: 6px; height: auto; flex-wrap: wrap; padding: 8px 10px; }
+    .nav-bar h1 { font-size: 14px; width: 100%; margin-bottom: 4px; }
+    .nav-btn { padding: 7px 12px; font-size: 12px; flex: 1; text-align: center; }
+
+    /* Pages */
+    .page { padding: 12px; }
+
+    /* Settings */
+    .settings-grid { grid-template-columns: 1fr; }
+    .form-row-inline { grid-template-columns: 1fr; }
+    .form-grid-3 { grid-template-columns: 1fr; }
+
+    /* Invoice toolbar */
+    .inv-toolbar { flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px; }
+    .btn-new { width: 100%; text-align: center; }
+
+    /* Invoice cards */
+    .inv-card { padding: 12px; }
+    .inv-card-actions { flex-wrap: wrap; gap: 6px; }
+    .inv-card-actions button { flex: 1; font-size: 12px; padding: 6px 8px; }
+
+    /* Form section */
+    .form-section { margin-bottom: 14px; }
+
+    /* Items table — scroll horizontal */
+    .items-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .items-table { min-width: 480px; }
+
+    /* Totals */
+    .totals-area { justify-content: stretch; }
+    .totals-table { width: 100%; min-width: unset; }
+
+    /* Action buttons */
+    .modal-actions { flex-wrap: wrap; }
+    .modal-actions button { min-width: 45%; font-size: 13px; }
+
+    /* VAT radio */
+    .vat-options { flex-direction: column; gap: 6px; }
+  }
 </style>
 </head>
 <body>
@@ -545,6 +589,7 @@
     <!-- Items -->
     <div class="form-section">
       <h4>📦 รายการสินค้า / Items</h4>
+      <div class="items-table-wrap">
       <table class="items-table">
         <thead>
           <tr>
@@ -558,6 +603,7 @@
         </thead>
         <tbody id="items-tbody"></tbody>
       </table>
+      </div>
       <button class="btn-add-row" onclick="addItemRow()">+ เพิ่มรายการ</button>
     </div>
 
