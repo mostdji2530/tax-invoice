@@ -799,13 +799,33 @@ function handleLogoUpload(e) {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = ev => {
-    settings.logo = ev.target.result;
-    document.getElementById('logo-preview').src = ev.target.result;
-    document.getElementById('logo-preview').style.display = 'block';
-    document.getElementById('logo-placeholder').style.display = 'none';
-    saveData();
-    updateLogoPreviewSize();
-    showToast('✅ อัปโหลดโลโก้แล้ว');
+    const base64 = ev.target.result;
+    showToast('⏳ กำลังอัปโหลดโลโก้...');
+    fetch(SHEET_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'upload_image', base64: base64, filename: 'logo.png' })
+    })
+    .then(r => r.json())
+    .then(res => {
+      if (res.status === 'ok') {
+        settings.logo = res.url;
+        document.getElementById('logo-preview').src = res.url;
+        document.getElementById('logo-preview').style.display = 'block';
+        document.getElementById('logo-placeholder').style.display = 'none';
+        saveData(); updateLogoPreviewSize();
+        showToast('✅ อัปโหลดโลโก้ไป Drive แล้ว');
+      } else { showToast('⚠️ อัปโหลดไม่สำเร็จ'); }
+    })
+    .catch(() => {
+      // fallback เก็บ base64 ในเครื่อง
+      settings.logo = base64;
+      document.getElementById('logo-preview').src = base64;
+      document.getElementById('logo-preview').style.display = 'block';
+      document.getElementById('logo-placeholder').style.display = 'none';
+      saveData(); updateLogoPreviewSize();
+      showToast('✅ บันทึกโลโก้ในเครื่อง (ออฟไลน์)');
+    });
   };
   reader.readAsDataURL(file);
 }
@@ -842,17 +862,39 @@ function handleWmUpload(e) {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = ev => {
-    settings.watermark = ev.target.result;
+    const base64 = ev.target.result;
     const op = parseFloat(document.getElementById('s-wm-opacity').value);
-    document.getElementById('wm-preview').src = ev.target.result;
-    document.getElementById('wm-preview').style.display = 'block';
-    document.getElementById('wm-placeholder').style.display = 'none';
-    document.getElementById('wm-doc-img').src = ev.target.result;
-    document.getElementById('wm-doc-img').style.display = 'block';
-    document.getElementById('wm-doc-img').style.opacity = op;
-    document.getElementById('wm-preview-placeholder').style.display = 'none';
-    saveData(); showToast('✅ อัปโหลดลายน้ำแล้ว');
-  };
+    showToast('⏳ กำลังอัปโหลดลายน้ำ...');
+    fetch(SHEET_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'upload_image', base64: base64, filename: 'watermark.png' })
+    })
+    .then(r => r.json())
+    .then(res => {
+      if (res.status === 'ok') {
+        settings.watermark = res.url;
+        document.getElementById('wm-preview').src = res.url;
+        document.getElementById('wm-preview').style.display = 'block';
+        document.getElementById('wm-placeholder').style.display = 'none';
+        document.getElementById('wm-doc-img').src = res.url;
+        document.getElementById('wm-doc-img').style.display = 'block';
+        document.getElementById('wm-doc-img').style.opacity = op;
+        document.getElementById('wm-preview-placeholder').style.display = 'none';
+        saveData(); showToast('✅ อัปโหลดลายน้ำไป Drive แล้ว');
+      } else { showToast('⚠️ อัปโหลดไม่สำเร็จ'); }
+    })
+    .catch(() => {
+      settings.watermark = base64;
+      document.getElementById('wm-preview').src = base64;
+      document.getElementById('wm-preview').style.display = 'block';
+      document.getElementById('wm-placeholder').style.display = 'none';
+      document.getElementById('wm-doc-img').src = base64;
+      document.getElementById('wm-doc-img').style.display = 'block';
+      document.getElementById('wm-doc-img').style.opacity = op;
+      document.getElementById('wm-preview-placeholder').style.display = 'none';
+      saveData(); showToast('✅ บันทึกลายน้ำในเครื่อง (ออฟไลน์)');
+    });
   reader.readAsDataURL(file);
 }
 
