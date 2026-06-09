@@ -790,7 +790,8 @@ function saveSettings() {
   settings.wmOpacity = parseFloat(document.getElementById('s-wm-opacity').value);
   saveData();
   updateNextDocNum();
-  showToast('✅ บันทึกการตั้งค่าเรียบร้อย');
+  syncSettingsToSheet();
+  showToast('✅ บันทึกการตั้งค่าเรียบร้อย + ซิงค์ Cloud');
 }
 
 function handleLogoUpload(e) {
@@ -871,6 +872,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const op = parseFloat(this.value);
     document.getElementById('wm-doc-img').style.opacity = op;
   });
+  // โหลดการตั้งค่าจาก Cloud อัตโนมัติ
+  loadSettingsFromSheet();
 });
 
 // ============================================================
@@ -1134,6 +1137,37 @@ function collectInvoiceData() {
 }
 
 const SHEET_URL = 'https://script.google.com/macros/s/AKfycbyUx-R7RhH1mc9mWhUBMdPnaBhCICLZjo6FQp5EgoOnmBLaC3qSFKrMYwafm20sm3wLuQ/exec';
+
+// ส่งการตั้งค่าขึ้น Sheet (ไม่รวม logo/watermark เพราะไฟล์ใหญ่เกินไป)
+function syncSettingsToSheet() {
+  const payload = Object.assign({}, settings, { type: 'settings', logo: null, watermark: null });
+  fetch(SHEET_URL, {
+    method: 'POST', mode: 'no-cors',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  }).catch(err => console.warn('Settings sync failed:', err));
+}
+
+// โหลดการตั้งค่าจาก Sheet (ถ้ามี)
+function loadSettingsFromSheet() {
+  fetch(SHEET_URL + '?type=settings')
+    .then(r => r.json())
+    .then(data => {
+      if (data && data.status !== 'empty' && data.companyName !== undefined) {
+        // เก็บ logo/watermark ของเครื่องนี้ไว้ก่อน
+        const localLogo = settings.logo;
+        const localWm   = settings.watermark;
+        settings = Object.assign(settings, data);
+        settings.logo      = localLogo;
+        settings.watermark = localWm;
+        settings.type      = undefined;
+        localStorage.setItem('inv_settings', JSON.stringify(settings));
+        updateNextDocNum();
+        showToast('☁️ โหลดการตั้งค่าจาก Cloud แล้ว');
+      }
+    })
+    .catch(() => {}); // ถ้าออฟไลน์ใช้ค่าจาก localStorage ต่อ
+}
 
 function saveToSheet(data) {
   fetch(SHEET_URL, {
