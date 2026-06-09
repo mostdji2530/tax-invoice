@@ -794,37 +794,35 @@ function saveSettings() {
   showToast('✅ บันทึกการตั้งค่าเรียบร้อย + ซิงค์ Cloud');
 }
 
+function compressImage(base64, maxPx, quality, cb) {
+  const img = new Image();
+  img.onload = function() {
+    let w = img.width, h = img.height;
+    if (w > maxPx || h > maxPx) {
+      if (w > h) { h = Math.round(h * maxPx / w); w = maxPx; }
+      else { w = Math.round(w * maxPx / h); h = maxPx; }
+    }
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    c.getContext('2d').drawImage(img, 0, 0, w, h);
+    cb(c.toDataURL('image/jpeg', quality));
+  };
+  img.src = base64;
+}
+
 function handleLogoUpload(e) {
   const file = e.target.files[0];
   if (!file) return;
   const reader = new FileReader();
   reader.onload = ev => {
-    const base64 = ev.target.result;
-    showToast('⏳ กำลังอัปโหลดโลโก้...');
-    fetch(SHEET_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'upload_image', base64: base64, filename: 'logo.png' })
-    })
-    .then(r => r.json())
-    .then(res => {
-      if (res.status === 'ok') {
-        settings.logo = res.url;
-        document.getElementById('logo-preview').src = res.url;
-        document.getElementById('logo-preview').style.display = 'block';
-        document.getElementById('logo-placeholder').style.display = 'none';
-        saveData(); updateLogoPreviewSize();
-        showToast('✅ อัปโหลดโลโก้ไป Drive แล้ว');
-      } else { showToast('⚠️ อัปโหลดไม่สำเร็จ'); }
-    })
-    .catch(() => {
-      // fallback เก็บ base64 ในเครื่อง
-      settings.logo = base64;
-      document.getElementById('logo-preview').src = base64;
+    compressImage(ev.target.result, 200, 0.75, compressed => {
+      settings.logo = compressed;
+      document.getElementById('logo-preview').src = compressed;
       document.getElementById('logo-preview').style.display = 'block';
       document.getElementById('logo-placeholder').style.display = 'none';
       saveData(); updateLogoPreviewSize();
-      showToast('✅ บันทึกโลโก้ในเครื่อง (ออฟไลน์)');
+      syncSettingsToSheet();
+      showToast('✅ บันทึกโลโก้และซิงค์ Cloud แล้ว');
     });
   };
   reader.readAsDataURL(file);
@@ -862,38 +860,18 @@ function handleWmUpload(e) {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = ev => {
-    const base64 = ev.target.result;
     const op = parseFloat(document.getElementById('s-wm-opacity').value);
-    showToast('⏳ กำลังอัปโหลดลายน้ำ...');
-    fetch(SHEET_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'upload_image', base64: base64, filename: 'watermark.png' })
-    })
-    .then(r => r.json())
-    .then(res => {
-      if (res.status === 'ok') {
-        settings.watermark = res.url;
-        document.getElementById('wm-preview').src = res.url;
-        document.getElementById('wm-preview').style.display = 'block';
-        document.getElementById('wm-placeholder').style.display = 'none';
-        document.getElementById('wm-doc-img').src = res.url;
-        document.getElementById('wm-doc-img').style.display = 'block';
-        document.getElementById('wm-doc-img').style.opacity = op;
-        document.getElementById('wm-preview-placeholder').style.display = 'none';
-        saveData(); showToast('✅ อัปโหลดลายน้ำไป Drive แล้ว');
-      } else { showToast('⚠️ อัปโหลดไม่สำเร็จ'); }
-    })
-    .catch(() => {
-      settings.watermark = base64;
-      document.getElementById('wm-preview').src = base64;
+    compressImage(ev.target.result, 300, 0.75, compressed => {
+      settings.watermark = compressed;
+      document.getElementById('wm-preview').src = compressed;
       document.getElementById('wm-preview').style.display = 'block';
       document.getElementById('wm-placeholder').style.display = 'none';
-      document.getElementById('wm-doc-img').src = base64;
+      document.getElementById('wm-doc-img').src = compressed;
       document.getElementById('wm-doc-img').style.display = 'block';
       document.getElementById('wm-doc-img').style.opacity = op;
       document.getElementById('wm-preview-placeholder').style.display = 'none';
-      saveData(); showToast('✅ บันทึกลายน้ำในเครื่อง (ออฟไลน์)');
+      saveData(); syncSettingsToSheet();
+      showToast('✅ บันทึกลายน้ำและซิงค์ Cloud แล้ว');
     });
   };
   reader.readAsDataURL(file);
@@ -1181,9 +1159,9 @@ function collectInvoiceData() {
 
 const SHEET_URL = 'https://script.google.com/macros/s/AKfycbyUx-R7RhH1mc9mWhUBMdPnaBhCICLZjo6FQp5EgoOnmBLaC3qSFKrMYwafm20sm3wLuQ/exec';
 
-// ส่งการตั้งค่าขึ้น Sheet (ไม่รวม logo/watermark เพราะไฟล์ใหญ่เกินไป)
+// ส่งการตั้งค่าขึ้น Sheet (รวม logo/watermark ที่บีบอัดแล้ว — ขนาดเล็ก)
 function syncSettingsToSheet() {
-  const payload = Object.assign({}, settings, { type: 'settings', logo: null, watermark: null });
+  const payload = Object.assign({}, settings, { type: 'settings' });
   fetch(SHEET_URL, {
     method: 'POST', mode: 'no-cors',
     headers: { 'Content-Type': 'application/json' },
@@ -1197,15 +1175,11 @@ function loadSettingsFromSheet() {
     .then(r => r.json())
     .then(data => {
       if (data && data.status !== 'empty' && data.companyName !== undefined) {
-        // เก็บ logo/watermark ของเครื่องนี้ไว้ก่อน
-        const localLogo = settings.logo;
-        const localWm   = settings.watermark;
         settings = Object.assign(settings, data);
-        settings.logo      = localLogo;
-        settings.watermark = localWm;
-        settings.type      = undefined;
+        settings.type = undefined;
         localStorage.setItem('inv_settings', JSON.stringify(settings));
         updateNextDocNum();
+        loadSettingsForm();
         showToast('☁️ โหลดการตั้งค่าจาก Cloud แล้ว');
       }
     })
