@@ -1234,15 +1234,13 @@ async function pushAllToCloud(silent = false) {
   if (!invoices.length) { if (!silent) showToast('⚠️ ไม่มีข้อมูลในเครื่อง'); return; }
   if (!silent && !confirm('Push ใบเสร็จ ' + invoices.length + ' รายการขึ้น Cloud?\n\nข้อมูลเดิมใน Sheet จะถูกลบแล้ว push ใหม่ทั้งหมด')) return;
   try {
-    const res = await fetch(SHEET_URL, {
+    await fetch(SHEET_URL, {
       method: 'POST',
+      mode: 'no-cors',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type: 'push_all', invoices: invoices })
     });
-    const result = await res.json();
-    if (!silent && result.status === 'ok') {
-      showToast('✅ Push ' + invoices.length + ' รายการขึ้น Cloud แล้ว');
-    }
+    if (!silent) showToast('✅ Push ' + invoices.length + ' รายการขึ้น Cloud แล้ว');
   } catch(err) {
     if (!silent) showToast('⚠️ เชื่อมต่อไม่ได้: ' + err.message);
   }
@@ -1277,9 +1275,9 @@ async function clearAllDevices() {
   updateNextDocNum();
   renderInvoiceList();
   try {
-    // รอให้ Sheet ล้างเสร็จก่อน (await)
     await fetch(SHEET_URL, {
       method: 'POST',
+      mode: 'no-cors',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type: 'push_all', invoices: [] })
     });
