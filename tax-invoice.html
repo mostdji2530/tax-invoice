@@ -367,7 +367,11 @@
       <div style="font-size:12px;color:#888;margin-bottom:2px;">เลขที่เอกสารถัดไป</div>
       <strong id="next-docnum">RC001</strong>
     </div>
-    <button class="btn-new" onclick="showPage('form'); resetForm();">+ สร้างเอกสารใหม่</button>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
+      <button onclick="pushAllToCloud()" style="background:#e3f2fd;color:#1565c0;border:1px solid #90caf9;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:13px;font-family:inherit;font-weight:600;">⬆️ Push ไป Cloud</button>
+      <button onclick="loadInvoicesFromSheet()" style="background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:13px;font-family:inherit;font-weight:600;">⬇️ โหลดจาก Cloud</button>
+      <button class="btn-new" onclick="showPage('form'); resetForm();">+ สร้างเอกสารใหม่</button>
+    </div>
   </div>
   <div class="inv-list" id="inv-list-container">
     <div class="empty-state">ยังไม่มีเอกสาร</div>
@@ -530,11 +534,15 @@
     <button class="btn-save" onclick="saveSettings()" style="padding:12px 40px;font-size:16px;">
       💾 บันทึกการตั้งค่า
     </button>
-    <div style="border-top:1px solid #eee; width:100%; max-width:400px; padding-top:16px;">
-      <p style="font-size:13px; color:#888; margin-bottom:10px;">⚠️ ล้างข้อมูลเอกสารทั้งหมด (ไม่สามารถกู้คืนได้)</p>
-      <button onclick="resetHistory()" style="background:#ffebee; color:#c62828; border:1px solid #ef9a9a; padding:10px 28px; border-radius:6px; cursor:pointer; font-size:14px; font-family:inherit; font-weight:600; transition:background 0.2s;"
+    <div style="border-top:1px solid #eee; width:100%; max-width:400px; padding-top:16px; display:flex; flex-direction:column; gap:10px; align-items:center;">
+      <p style="font-size:13px; color:#888; margin-bottom:0;">⚠️ ล้างข้อมูลเอกสาร (ไม่สามารถกู้คืนได้)</p>
+      <button onclick="resetHistory()" style="background:#ffebee; color:#c62828; border:1px solid #ef9a9a; padding:10px 28px; border-radius:6px; cursor:pointer; font-size:14px; font-family:inherit; font-weight:600;"
         onmouseover="this.style.background='#ffcdd2'" onmouseout="this.style.background='#ffebee'">
-        🗑️ ล้างประวัติเอกสารทั้งหมด
+        🗑️ ล้างประวัติ (เครื่องนี้)
+      </button>
+      <button onclick="clearAllDevices()" style="background:#fce4ec; color:#880e4f; border:1px solid #f48fb1; padding:10px 28px; border-radius:6px; cursor:pointer; font-size:14px; font-family:inherit; font-weight:600;"
+        onmouseover="this.style.background='#f8bbd0'" onmouseout="this.style.background='#fce4ec'">
+        🌐 ล้างประวัติ (ทุกเครื่อง)
       </button>
     </div>
   </div>
@@ -758,15 +766,17 @@ function loadSettingsForm() {
   }
 }
 
+function renderHistory() { renderInvoiceList(); }
+
 function resetHistory() {
   if (!confirm('ลบประวัติเอกสารทั้งหมด ' + invoices.length + ' รายการ?\n\nไม่สามารถกู้คืนได้')) return;
   invoices = [];
   settings.currentNum = 1;
   saveData();
+  syncSettingsToSheet(); // sync currentNum กลับ Cloud ด้วย
   updateNextDocNum();
   renderInvoiceList();
-  openNewInvoice();
-  showToast('🗑️ ล้างประวัติแล้ว');
+  showToast('🗑️ ล้างประวัติแล้ว — เลขเอกสารรีเซ็ตเป็น 001');
 }
 
 function saveSettings() {
@@ -1175,8 +1185,15 @@ function loadSettingsFromSheet() {
     .then(r => r.json())
     .then(data => {
       if (data && data.status !== 'empty' && data.companyName !== undefined) {
+        const prevClear = settings.clearTimestamp || 0;
         settings = Object.assign(settings, data);
         settings.type = undefined;
+        // ถ้า Cloud มี clearTimestamp ใหม่กว่า → ล้างประวัติเครื่องนี้ด้วย
+        if ((settings.clearTimestamp || 0) > prevClear) {
+          invoices = [];
+          localStorage.setItem('inv_list', JSON.stringify([]));
+          renderHistory();
+        }
         localStorage.setItem('inv_settings', JSON.stringify(settings));
         updateNextDocNum();
         loadSettingsForm();
@@ -1184,6 +1201,58 @@ function loadSettingsFromSheet() {
       }
     })
     .catch(() => {}); // ถ้าออฟไลน์ใช้ค่าจาก localStorage ต่อ
+}
+
+// Push ใบเสร็จทั้งหมดในเครื่องขึ้น Cloud (Google Sheets)
+async function pushAllToCloud() {
+  if (!invoices.length) { showToast('⚠️ ไม่มีข้อมูลในเครื่อง'); return; }
+  if (!confirm('Push ใบเสร็จ ' + invoices.length + ' รายการขึ้น Cloud?\n\nข้อมูลเดิมใน Sheet จะถูกลบแล้ว push ใหม่ทั้งหมด')) return;
+  showToast('⏳ กำลัง Push ' + invoices.length + ' รายการ...');
+  try {
+    // ส่ง batch ครั้งเดียว
+    const res = await fetch(SHEET_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'push_all', invoices: invoices })
+    });
+    const result = await res.json();
+    if (result.status === 'ok') {
+      showToast('✅ Push ' + invoices.length + ' รายการขึ้น Cloud แล้ว');
+    } else {
+      showToast('⚠️ Push ไม่สำเร็จ: ' + (result.message || ''));
+    }
+  } catch(err) {
+    showToast('⚠️ เชื่อมต่อไม่ได้: ' + err.message);
+  }
+}
+
+// โหลดประวัติใบเสร็จจาก Cloud (Google Sheets)
+function loadInvoicesFromSheet() {
+  showToast('⏳ กำลังโหลดจาก Cloud...');
+  fetch(SHEET_URL + '?type=invoices')
+    .then(r => r.json())
+    .then(data => {
+      if (data && Array.isArray(data.invoices) && data.invoices.length > 0) {
+        invoices = data.invoices;
+        saveData();
+        renderHistory();
+        showToast('✅ โหลด ' + data.invoices.length + ' รายการจาก Cloud');
+      } else {
+        showToast('☁️ ไม่พบข้อมูลใน Cloud');
+      }
+    })
+    .catch(() => showToast('⚠️ โหลดไม่สำเร็จ — ตรวจสอบการเชื่อมต่อ'));
+}
+
+// ล้างประวัติใบเสร็จทุกเครื่อง (บันทึก timestamp ลง Cloud)
+function clearAllDevices() {
+  if (!confirm('⚠️ ล้างประวัติใบเสร็จในทุกเครื่อง?\n\nข้อมูลใน Google Sheets จะยังคงอยู่ แต่ทุกเครื่องจะล้างหน้าจอประวัติ')) return;
+  invoices = [];
+  settings.clearTimestamp = Date.now();
+  saveData();
+  renderHistory();
+  syncSettingsToSheet();
+  showToast('🌐 ล้างประวัติทุกเครื่องแล้ว (Cloud sync)');
 }
 
 function saveToSheet(data) {
