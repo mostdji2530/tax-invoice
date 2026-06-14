@@ -368,8 +368,6 @@
       <strong id="next-docnum">RC001</strong>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
-      <button onclick="pushAllToCloud()" style="background:#e3f2fd;color:#1565c0;border:1px solid #90caf9;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:13px;font-family:inherit;font-weight:600;">⬆️ Push ไป Cloud</button>
-      <button onclick="loadInvoicesFromSheet()" style="background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:13px;font-family:inherit;font-weight:600;">⬇️ โหลดจาก Cloud</button>
       <button class="btn-new" onclick="showPage('form'); resetForm();">+ สร้างเอกสารใหม่</button>
     </div>
   </div>
@@ -903,8 +901,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const op = parseFloat(this.value);
     document.getElementById('wm-doc-img').style.opacity = op;
   });
-  // โหลดการตั้งค่าจาก Cloud อัตโนมัติ
+  // โหลด settings + invoices จาก Cloud อัตโนมัติ
   loadSettingsFromSheet();
+  autoLoadInvoicesFromCloud();
 });
 
 // ============================================================
@@ -947,6 +946,7 @@ function deleteInvoice(i) {
   invoices.splice(i, 1);
   saveData();
   renderInvoiceList();
+  pushAllToCloud(true); // auto push หลังลบ (silent)
   showToast('🗑️ ลบเอกสารแล้ว');
 }
 
@@ -1203,26 +1203,36 @@ function loadSettingsFromSheet() {
     .catch(() => {}); // ถ้าออฟไลน์ใช้ค่าจาก localStorage ต่อ
 }
 
+// โหลด invoices จาก Cloud อัตโนมัติเมื่อเปิดแอป (silent)
+function autoLoadInvoicesFromCloud() {
+  fetch(SHEET_URL + '?type=invoices')
+    .then(r => r.json())
+    .then(data => {
+      if (data && Array.isArray(data.invoices) && data.invoices.length > 0) {
+        invoices = data.invoices;
+        saveData();
+        renderInvoiceList();
+      }
+    })
+    .catch(() => {}); // ออฟไลน์ → ใช้ localStorage ต่อ
+}
+
 // Push ใบเสร็จทั้งหมดในเครื่องขึ้น Cloud (Google Sheets)
-async function pushAllToCloud() {
-  if (!invoices.length) { showToast('⚠️ ไม่มีข้อมูลในเครื่อง'); return; }
-  if (!confirm('Push ใบเสร็จ ' + invoices.length + ' รายการขึ้น Cloud?\n\nข้อมูลเดิมใน Sheet จะถูกลบแล้ว push ใหม่ทั้งหมด')) return;
-  showToast('⏳ กำลัง Push ' + invoices.length + ' รายการ...');
+async function pushAllToCloud(silent = false) {
+  if (!invoices.length) { if (!silent) showToast('⚠️ ไม่มีข้อมูลในเครื่อง'); return; }
+  if (!silent && !confirm('Push ใบเสร็จ ' + invoices.length + ' รายการขึ้น Cloud?\n\nข้อมูลเดิมใน Sheet จะถูกลบแล้ว push ใหม่ทั้งหมด')) return;
   try {
-    // ส่ง batch ครั้งเดียว
     const res = await fetch(SHEET_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type: 'push_all', invoices: invoices })
     });
     const result = await res.json();
-    if (result.status === 'ok') {
+    if (!silent && result.status === 'ok') {
       showToast('✅ Push ' + invoices.length + ' รายการขึ้น Cloud แล้ว');
-    } else {
-      showToast('⚠️ Push ไม่สำเร็จ: ' + (result.message || ''));
     }
   } catch(err) {
-    showToast('⚠️ เชื่อมต่อไม่ได้: ' + err.message);
+    if (!silent) showToast('⚠️ เชื่อมต่อไม่ได้: ' + err.message);
   }
 }
 
@@ -1272,14 +1282,13 @@ function saveInvoice() {
     settings.currentNum++;
     saveData();
     updateNextDocNum();
-    saveToSheet(data);
-    showToast('✅ บันทึกเอกสาร ' + data.docNum + ' — กด "ประวัติ" เพื่อดูเอกสาร');
+    showToast('✅ บันทึกเอกสาร ' + data.docNum);
   } else {
     invoices[editingIndex] = data;
     saveData();
-    saveToSheet(data);
     showToast('✅ อัปเดตเอกสาร ' + data.docNum);
   }
+  pushAllToCloud(true); // auto sync ทุกครั้งที่บันทึก
   renderInvoiceList();
   openNewInvoice();
 }
