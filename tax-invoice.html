@@ -1205,6 +1205,9 @@ function autoLoadInvoicesFromCloud() {
     .then(r => r.json())
     .then(data => {
       if (data && Array.isArray(data.invoices) && data.invoices.length > 0) {
+        // ไม่โหลดถ้าเพิ่งล้าง (ภายใน 30 วินาที)
+        const justCleared = (Date.now() - (settings.clearTimestamp || 0)) < 30000;
+        if (justCleared) return;
         invoices = data.invoices;
         saveData();
         renderInvoiceList();
@@ -1251,22 +1254,28 @@ function loadInvoicesFromSheet() {
 }
 
 // ล้างประวัติใบเสร็จทุกเครื่อง (บันทึก timestamp ลง Cloud)
-function clearAllDevices() {
+async function clearAllDevices() {
   if (!confirm('⚠️ ล้างประวัติใบเสร็จในทุกเครื่อง?\n\nไม่สามารถกู้คืนได้')) return;
+  showToast('⏳ กำลังล้างข้อมูล...');
   invoices = [];
   settings.currentNum = 1;
   settings.clearTimestamp = Date.now();
   saveData();
   updateNextDocNum();
   renderInvoiceList();
-  syncSettingsToSheet();
-  // ล้าง Sheet ด้วย
-  fetch(SHEET_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ type: 'push_all', invoices: [] })
-  }).catch(() => {});
-  showToast('🌐 ล้างประวัติทุกเครื่องแล้ว');
+  try {
+    // รอให้ Sheet ล้างเสร็จก่อน (await)
+    await fetch(SHEET_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'push_all', invoices: [] })
+    });
+    syncSettingsToSheet();
+    showToast('🌐 ล้างประวัติทุกเครื่องแล้ว');
+  } catch(e) {
+    syncSettingsToSheet();
+    showToast('🌐 ล้างในเครื่องแล้ว (Cloud อาจยังไม่ sync)');
+  }
 }
 
 function saveToSheet(data) {
