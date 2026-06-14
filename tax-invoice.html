@@ -1223,7 +1223,19 @@ function autoLoadInvoicesFromCloud() {
         const justCleared = (Date.now() - (settings.clearTimestamp || 0)) < 30000;
         if (justCleared) return;
         invoices = data.invoices;
+        // คำนวณ currentNum จากเลขสูงสุดใน invoices
+        const pad = settings.padding || 3;
+        const prefix = settings.prefix || 'JK';
+        let maxNum = settings.currentNum || 1;
+        invoices.forEach(inv => {
+          if (inv.docNum && inv.docNum.startsWith(prefix)) {
+            const n = parseInt(inv.docNum.replace(prefix, '')) || 0;
+            if (n >= maxNum) maxNum = n + 1;
+          }
+        });
+        settings.currentNum = maxNum;
         saveData();
+        updateNextDocNum();
         renderInvoiceList();
       }
     })
@@ -1307,6 +1319,7 @@ function saveInvoice() {
     settings.currentNum++;
     saveData();
     updateNextDocNum();
+    syncSettingsToSheet(); // sync เลขเอกสารถัดไปไปทุกเครื่อง
     showToast('✅ บันทึกเอกสาร ' + data.docNum);
   } else {
     invoices[editingIndex] = data;
