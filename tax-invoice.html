@@ -1236,6 +1236,14 @@ function autoLoadInvoicesFromCloud() {
         settings.currentNum = maxNum;
         saveData();
         updateNextDocNum();
+        // อัปเดต field เลขเอกสารในฟอร์มถ้ากำลังสร้างใหม่
+        if (typeof editingIndex !== 'undefined' && editingIndex === -1) {
+          const docNum = formatDocNum(settings.currentNum);
+          const el = document.getElementById('f-docnum');
+          if (el) el.value = docNum;
+          const badge = document.getElementById('form-docnum-badge');
+          if (badge) badge.textContent = docNum;
+        }
         renderInvoiceList();
       }
     })
