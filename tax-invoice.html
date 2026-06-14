@@ -1042,10 +1042,9 @@ function addItemRow(data) {
   document.getElementById('items-tbody').appendChild(tr);
   // Set values via JS property (not HTML attribute) to ensure .value works
   if (data) {
-    tr.querySelector('[data-field="desc"]').value = data.desc || '';
-    tr.querySelector('[data-field="qty"]').value  = data.qty  != null ? data.qty  : '';
-    tr.querySelector('[data-field="unit"]').value = data.unit || '';
-    tr.querySelector('[data-field="price"]').value= data.price!= null ? data.price: '';
+    tr.querySelector('[data-field="desc"]').value  = data.desc  || '';
+    tr.querySelector('[data-field="qty"]').value   = data.qty   != null ? data.qty   : '';
+    tr.querySelector('[data-field="price"]').value = data.price != null ? data.price : '';
   }
   calcTotals();
 }
