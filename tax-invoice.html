@@ -717,23 +717,25 @@ function showPage(id) {
 // ============================================================
 //  SETTINGS
 // ============================================================
+function setVal(id, val) { const el = document.getElementById(id); if (el) el.value = val; }
+
 function loadSettingsForm() {
-  document.getElementById('s-company-name').value = settings.companyName || '';
-  document.getElementById('s-address').value = settings.address || '';
-  document.getElementById('s-phone').value = settings.phone || '';
-  document.getElementById('s-fax').value = settings.fax || '';
-  document.getElementById('s-email').value = settings.email || '';
-  document.getElementById('s-taxid').value = settings.taxId || '';
-  document.getElementById('s-branch').value = settings.branch || '';
-  document.getElementById('s-doc-type').value = settings.docType || 'ใบกำกับภาษี / ใบเสร็จรับเงิน';
-  document.getElementById('s-doc-type-en').value = settings.docTypeEn || '';
-  document.getElementById('s-prefix').value = settings.prefix || 'RC';
-  document.getElementById('s-start-num').value = settings.currentNum || 1;
-  document.getElementById('s-padding').value = settings.padding || 3;
-  document.getElementById('s-vat').value = settings.vat ?? 7;
-  document.getElementById('s-credit').value = settings.credit || '';
-  document.getElementById('s-footer-text').value = settings.footerText || '';
-  document.getElementById('s-remark').value = settings.remark || '';
+  setVal('s-company-name', settings.companyName || '');
+  setVal('s-address', settings.address || '');
+  setVal('s-phone', settings.phone || '');
+  setVal('s-fax', settings.fax || '');
+  setVal('s-email', settings.email || '');
+  setVal('s-taxid', settings.taxId || '');
+  setVal('s-branch', settings.branch || '');
+  setVal('s-doc-type', settings.docType || 'ใบกำกับภาษี / ใบเสร็จรับเงิน');
+  setVal('s-doc-type-en', settings.docTypeEn || '');
+  setVal('s-prefix', settings.prefix || 'JK');
+  setVal('s-start-num', settings.currentNum || 1);
+  setVal('s-padding', settings.padding || 3);
+  setVal('s-vat', settings.vat ?? 7);
+  setVal('s-credit', settings.credit || '');
+  setVal('s-footer-text', settings.footerText || '');
+  setVal('s-remark', settings.remark || '');
 
   const logoSize = settings.logoSize ?? 70;
   document.getElementById('s-logo-size').value = logoSize;
@@ -978,14 +980,18 @@ function editInvoice(i) {
 
     editingIndex = i;
     const inv = invoices[i];
-    document.getElementById('modal-title-text').textContent = 'แก้ไขเอกสาร ' + inv.docNum;
-    document.getElementById('form-docnum-badge').textContent = inv.docNum;
-    document.getElementById('f-docnum').value = inv.docNum;
-    document.getElementById('f-date').value = inv.date || '';
-    document.getElementById('f-cust-name').value = inv.custName || '';
-    document.getElementById('f-cust-addr').value = inv.custAddr || '';
-    document.getElementById('f-cust-branch').value = inv.custBranch || '';
-    document.getElementById('f-cust-taxid').value = inv.custTaxId || '';
+    if (!inv) { showToast('⚠️ ไม่พบข้อมูลเอกสาร'); return; }
+    setVal('modal-title-text', '');
+    const titleEl = document.getElementById('modal-title-text');
+    if (titleEl) titleEl.textContent = 'แก้ไขเอกสาร ' + inv.docNum;
+    const badgeEl = document.getElementById('form-docnum-badge');
+    if (badgeEl) badgeEl.textContent = inv.docNum;
+    setVal('f-docnum', inv.docNum || '');
+    setVal('f-date', inv.date || '');
+    setVal('f-cust-name', inv.custName || '');
+    setVal('f-cust-addr', inv.custAddr || '');
+    setVal('f-cust-branch', inv.custBranch || '');
+    setVal('f-cust-taxid', inv.custTaxId || '');
     setVatMode(inv.vatMode || 'none');
     initItems(inv.items || []);
     calcTotals();
