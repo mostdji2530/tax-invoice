@@ -686,20 +686,22 @@ let invoices = [];
 let editingIndex = -1;
 
 // ============================================================
-//  LOAD / SAVE
+//  LOAD / SAVE  (Cloud = primary, localStorage = cache/fallback)
 // ============================================================
-function loadData() {
+function saveData() {
+  // เขียน cache ลง localStorage เท่านั้น (ไม่ใช่ source of truth)
+  localStorage.setItem('inv_settings', JSON.stringify(settings));
+  localStorage.setItem('inv_list', JSON.stringify(invoices));
+}
+
+function loadLocalCache() {
+  // ใช้เฉพาะตอนออฟไลน์
   try {
     const s = localStorage.getItem('inv_settings');
     if (s) settings = Object.assign(settings, JSON.parse(s));
     const i = localStorage.getItem('inv_list');
     if (i) invoices = JSON.parse(i);
-  } catch(e) { console.warn('Load error', e); }
-}
-
-function saveData() {
-  localStorage.setItem('inv_settings', JSON.stringify(settings));
-  localStorage.setItem('inv_list', JSON.stringify(invoices));
+  } catch(e) { console.warn('Cache load error', e); }
 }
 
 // ============================================================
@@ -900,9 +902,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const op = parseFloat(this.value);
     document.getElementById('wm-doc-img').style.opacity = op;
   });
-  // โหลด settings + invoices จาก Cloud อัตโนมัติ
-  loadSettingsFromSheet();
-  autoLoadInvoicesFromCloud();
 });
 
 // ============================================================
@@ -1181,73 +1180,73 @@ function syncSettingsToSheet() {
   }).catch(err => console.warn('Settings sync failed:', err));
 }
 
-// โหลดการตั้งค่าจาก Sheet (ถ้ามี)
+// ============================================================
+//  INIT — Cloud เป็น source of truth, localStorage เป็น fallback
+// ============================================================
+async function initApp() {
+  showToast('⏳ กำลังโหลดข้อมูลจาก Cloud...');
+  try {
+    // โหลด settings + invoices พร้อมกัน
+    const [sData, iData] = await Promise.all([
+      fetch(SHEET_URL + '?type=settings').then(r => r.json()).catch(() => null),
+      fetch(SHEET_URL + '?type=invoices').then(r => r.json()).catch(() => null)
+    ]);
+
+    // --- Settings ---
+    if (sData && sData.status !== 'empty' && sData.companyName !== undefined) {
+      const prevClear = settings.clearTimestamp || 0;
+      settings = Object.assign(settings, sData);
+      settings.type = undefined;
+      // clearTimestamp ใหม่กว่า → ล้าง invoices ด้วย
+      if ((settings.clearTimestamp || 0) > prevClear) invoices = [];
+    }
+
+    // --- Invoices ---
+    const justCleared = (Date.now() - (settings.clearTimestamp || 0)) < 30000;
+    if (!justCleared && iData && Array.isArray(iData.invoices)) {
+      invoices = iData.invoices;
+    }
+
+    // --- คำนวณ currentNum จาก invoices จริงๆ ---
+    const prefix = settings.prefix || 'JK';
+    let maxNum = settings.currentNum || 1;
+    invoices.forEach(inv => {
+      if (inv.docNum && inv.docNum.startsWith(prefix)) {
+        const n = parseInt(inv.docNum.replace(prefix, '')) || 0;
+        if (n >= maxNum) maxNum = n + 1;
+      }
+    });
+    settings.currentNum = maxNum;
+
+    saveData(); // cache ลง localStorage
+    showToast('☁️ โหลดข้อมูลจาก Cloud แล้ว');
+  } catch(e) {
+    // ออฟไลน์ → ใช้ localStorage cache
+    loadLocalCache();
+    showToast('⚠️ ออฟไลน์ — ใช้ข้อมูลในเครื่อง');
+  }
+
+  updateNextDocNum();
+  loadSettingsForm();
+  renderInvoiceList();
+  openNewInvoice();
+}
+
+// รีโหลดจาก Cloud หลังบันทึก Settings (เรียกจากปุ่มบันทึกการตั้งค่า)
 function loadSettingsFromSheet() {
   fetch(SHEET_URL + '?type=settings')
     .then(r => r.json())
     .then(data => {
       if (data && data.status !== 'empty' && data.companyName !== undefined) {
-        const prevClear = settings.clearTimestamp || 0;
         settings = Object.assign(settings, data);
         settings.type = undefined;
-        // ถ้า Cloud มี clearTimestamp ใหม่กว่า → ล้างประวัติเครื่องนี้ด้วย
-        if ((settings.clearTimestamp || 0) > prevClear) {
-          invoices = [];
-          localStorage.setItem('inv_list', JSON.stringify([]));
-          renderHistory();
-        }
-        localStorage.setItem('inv_settings', JSON.stringify(settings));
+        saveData();
         updateNextDocNum();
         loadSettingsForm();
-        // refresh เลขเอกสารในฟอร์มถ้ากำลังสร้างใหม่อยู่
-        if (typeof editingIndex !== 'undefined' && editingIndex === -1) {
-          const docNum = formatDocNum(settings.currentNum);
-          const el = document.getElementById('f-docnum');
-          if (el) el.value = docNum;
-          const badge = document.getElementById('form-docnum-badge');
-          if (badge) badge.textContent = docNum;
-        }
         showToast('☁️ โหลดการตั้งค่าจาก Cloud แล้ว');
       }
     })
-    .catch(() => {}); // ถ้าออฟไลน์ใช้ค่าจาก localStorage ต่อ
-}
-
-// โหลด invoices จาก Cloud อัตโนมัติเมื่อเปิดแอป (silent)
-function autoLoadInvoicesFromCloud() {
-  fetch(SHEET_URL + '?type=invoices')
-    .then(r => r.json())
-    .then(data => {
-      if (data && Array.isArray(data.invoices) && data.invoices.length > 0) {
-        // ไม่โหลดถ้าเพิ่งล้าง (ภายใน 30 วินาที)
-        const justCleared = (Date.now() - (settings.clearTimestamp || 0)) < 30000;
-        if (justCleared) return;
-        invoices = data.invoices;
-        // คำนวณ currentNum จากเลขสูงสุดใน invoices
-        const pad = settings.padding || 3;
-        const prefix = settings.prefix || 'JK';
-        let maxNum = settings.currentNum || 1;
-        invoices.forEach(inv => {
-          if (inv.docNum && inv.docNum.startsWith(prefix)) {
-            const n = parseInt(inv.docNum.replace(prefix, '')) || 0;
-            if (n >= maxNum) maxNum = n + 1;
-          }
-        });
-        settings.currentNum = maxNum;
-        saveData();
-        updateNextDocNum();
-        // อัปเดต field เลขเอกสารในฟอร์มถ้ากำลังสร้างใหม่
-        if (typeof editingIndex !== 'undefined' && editingIndex === -1) {
-          const docNum = formatDocNum(settings.currentNum);
-          const el = document.getElementById('f-docnum');
-          if (el) el.value = docNum;
-          const badge = document.getElementById('form-docnum-badge');
-          if (badge) badge.textContent = docNum;
-        }
-        renderInvoiceList();
-      }
-    })
-    .catch(() => {}); // ออฟไลน์ → ใช้ localStorage ต่อ
+    .catch(() => {});
 }
 
 // Push ใบเสร็จทั้งหมดในเครื่องขึ้น Cloud (Google Sheets)
@@ -1687,9 +1686,7 @@ function showToast(msg) {
 // ============================================================
 //  INIT
 // ============================================================
-loadData();
-updateNextDocNum();
-openNewInvoice();
+initApp();
 </script>
 </body>
 </html>
