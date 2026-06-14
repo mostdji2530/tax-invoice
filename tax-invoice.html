@@ -533,11 +533,7 @@
       💾 บันทึกการตั้งค่า
     </button>
     <div style="border-top:1px solid #eee; width:100%; max-width:400px; padding-top:16px; display:flex; flex-direction:column; gap:10px; align-items:center;">
-      <p style="font-size:13px; color:#888; margin-bottom:0;">⚠️ ล้างข้อมูลเอกสาร (ไม่สามารถกู้คืนได้)</p>
-      <button onclick="resetHistory()" style="background:#ffebee; color:#c62828; border:1px solid #ef9a9a; padding:10px 28px; border-radius:6px; cursor:pointer; font-size:14px; font-family:inherit; font-weight:600;"
-        onmouseover="this.style.background='#ffcdd2'" onmouseout="this.style.background='#ffebee'">
-        🗑️ ล้างประวัติ (เครื่องนี้)
-      </button>
+      <p style="font-size:13px; color:#888; margin-bottom:0;">⚠️ ล้างข้อมูลเอกสารทั้งหมด (ไม่สามารถกู้คืนได้)</p>
       <button onclick="clearAllDevices()" style="background:#fce4ec; color:#880e4f; border:1px solid #f48fb1; padding:10px 28px; border-radius:6px; cursor:pointer; font-size:14px; font-family:inherit; font-weight:600;"
         onmouseover="this.style.background='#f8bbd0'" onmouseout="this.style.background='#fce4ec'">
         🌐 ล้างประวัติ (ทุกเครื่อง)
@@ -1256,13 +1252,21 @@ function loadInvoicesFromSheet() {
 
 // ล้างประวัติใบเสร็จทุกเครื่อง (บันทึก timestamp ลง Cloud)
 function clearAllDevices() {
-  if (!confirm('⚠️ ล้างประวัติใบเสร็จในทุกเครื่อง?\n\nข้อมูลใน Google Sheets จะยังคงอยู่ แต่ทุกเครื่องจะล้างหน้าจอประวัติ')) return;
+  if (!confirm('⚠️ ล้างประวัติใบเสร็จในทุกเครื่อง?\n\nไม่สามารถกู้คืนได้')) return;
   invoices = [];
+  settings.currentNum = 1;
   settings.clearTimestamp = Date.now();
   saveData();
-  renderHistory();
+  updateNextDocNum();
+  renderInvoiceList();
   syncSettingsToSheet();
-  showToast('🌐 ล้างประวัติทุกเครื่องแล้ว (Cloud sync)');
+  // ล้าง Sheet ด้วย
+  fetch(SHEET_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type: 'push_all', invoices: [] })
+  }).catch(() => {});
+  showToast('🌐 ล้างประวัติทุกเครื่องแล้ว');
 }
 
 function saveToSheet(data) {
